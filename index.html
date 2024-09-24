@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Calculator</title>
+    <!-- Include PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(106.5deg, 
+            rgba(255, 105, 180, 0.9) 0%, 
+            rgba(255, 105, 180, 0.5) 23%, 
+            rgba(255, 192, 203, 0.5) 50%, 
+            rgba(255, 105, 180, 0.5) 93%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 40%;
+            padding: 15px;
+            border: 1px solid #ff69b4;
+            border-radius: 10px;
+            background: linear-gradient(106.5deg, 
+            rgba(255, 105, 180, 0.9) 0%, 
+            rgba(255, 105, 180, 0.5) 23%, 
+            rgba(255, 192, 203, 0.5) 50%, 
+            rgba(255, 105, 180, 0.5) 93%);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #ff69b4;
+        }
+        input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px;
+            border: 1px solid #ff69b4;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ff69b4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #ff33cc;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .message, .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Grade Calculator</h1>
+        <input type="number" id="absences" placeholder="Enter Number of Absences" min="0" step="1">
+        <input type="number" id="prelimExam" placeholder="Enter Prelim Exam Grade (0-100)" min="0" max="100" step="0.01">
+        <input type="number" id="quizzes" placeholder="Enter Quizzes Grade (0-100)" min="0" max="100" step="0.01">
+        <input type="number" id="requirements" placeholder="Enter Requirements Grade (0-100)" min="0" max="100" step="0.01">
+        <input type="number" id="recitation" placeholder="Enter Recitation Grade (0-100)" min="0" max="100" step="0.01">
+        <button id="calculateBtn">Calculate</button>
+    </div>
+
+    <!-- The Modal -->
+    <div id="resultModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2>Calculation Results</h2>
+            <p><b>Prelim Grade:</b> <span id="prelimGrade"></span></p>
+            <p><b>To pass with 75%, you need a Midterm grade of</b> <span id="midtermGrade"></span><b> and a Final grade of</b> <span id="finalGrade"></span></p>
+            <p><b>To achieve 90%, you need a Midterm grade of</b> <span id="midtermGrade2"></span><b> and a Final grade of</b> <span id="finalGrade2"></span></p>
+            <p id="passMessage" class="message"></p>
+            <p id="errorMessage" class="error"></p>
+            <button id="closeModalBtn">Close</button>
+        </div>
+    </div>
+
+<py-script>
+    from pyscript import Element
+    import asyncio
+
+    def calculate_attendance_score(absences):
+        """Return attendance score (0-100) based on absences"""
+        if absences >= 4:
+            return 0  # Attendance score is zero if absences are 4 or more
+        return max(0, 100 - (absences * 10))
+
+    def calculate_overall_class_performance(quiz, requirements, recitation):
+        """Return class standing score (0-100) based on quiz, requirements, and recitation"""
+        return (0.40 * quiz) + (0.30 * requirements) + (0.30 * recitation)
+
+    def calculate_preliminary_grade(prelim_exam, attendance, class_standing):
+        """Return preliminary grade score (0-100) based on prelim exam, attendance, and class standing"""
+        return (0.60 * prelim_exam) + (0.10 * attendance) + (0.30 * class_standing)
+
+    def target_scores_for_deans_lister_or_avoid_failing(prelim_grade):
+        """Return target scores for midterm and finals to achieve Dean's Lister or avoid failing"""
+        total_terms = 3
+        remaining_terms = total_terms - 1
+        
+        targets = {}
+        targets['deans_lister'] = ((90 * total_terms) - prelim_grade) / remaining_terms
+        targets['avoid_fail'] = ((75 * total_terms) - prelim_grade) / remaining_terms
+        
+        targets['deans_lister'] = min(max(targets['deans_lister'], 90), 100)
+        targets['avoid_fail'] = min(max(targets['avoid_fail'], 75), 100)
+        
+        return (targets['deans_lister'], targets['deans_lister'], targets['avoid_fail'], targets['avoid_fail'])
+
+    async def calculate_grade(event):
+        # Hide previous results and clear messages
+        result_element = Element("resultModal").element
+        result_element.style.display = "none"
+        Element("prelimGrade").element.innerHTML = "N/A"
+        Element("midtermGrade").element.innerHTML = "N/A"
+        Element("finalGrade").element.innerHTML = "N/A"
+        Element("midtermGrade2").element.innerHTML = "N/A"
+        Element("finalGrade2").element.innerHTML = "N/A"
+        Element("passMessage").element.innerHTML = ""
+        Element("errorMessage").element.innerHTML = ""
+
+        try:
+            # Retrieve input values
+            absences = int(Element("absences").element.value.strip())
+            prelim_exam = float(Element("prelimExam").element.value.strip())
+            quizzes = float(Element("quizzes").element.value.strip())
+            requirements = float(Element("requirements").element.value.strip())
+            recitation = float(Element("recitation").element.value.strip())
+
+            # Validate input ranges
+            if absences < 0:
+                raise ValueError("Absences cannot be negative.")
+            if not (0 <= prelim_exam <= 100):
+                raise ValueError("Prelim Exam Grade must be between 0 and 100.")
+            if not (0 <= quizzes <= 100):
+                raise ValueError("Quizzes Grade must be between 0 and 100.")
+            if not (0 <= requirements <= 100):
+                raise ValueError("Requirements Grade must be between 0 and 100.")
+            if not (0 <= recitation <= 100):
+                raise ValueError("Recitation Grade must be between 0 and 100.")
+            
+            # Calculate grades
+            attendance = calculate_attendance_score(absences)
+            if attendance == 0 and absences >= 4:
+                Element("errorMessage").element.innerHTML = "FAILED due to absences."
+                result_element.style.display = "block"
+                return
+
+            class_standing = calculate_overall_class_performance(quizzes, requirements, recitation)
+            prelim_grade = calculate_preliminary_grade(prelim_exam, attendance, class_standing)
+            midterm_grade_to_avoid_fail, midterm_grade_to_achieve_deans_lister, final_grade_to_avoid_fail, final_grade_to_achieve_deans_lister = target_scores_for_deans_lister_or_avoid_failing(prelim_grade)
+            
+            # Display results
+            Element("prelimGrade").element.innerHTML = f"{prelim_grade:.2f}"
+            Element("midtermGrade").element.innerHTML = f"{midterm_grade_to_avoid_fail:.2f}"
+            Element("finalGrade").element.innerHTML = f"{final_grade_to_avoid_fail:.2f}"
+            Element("midtermGrade2").element.innerHTML = f"{midterm_grade_to_achieve_deans_lister:.2f}"
+            Element("finalGrade2").element.innerHTML = f"{final_grade_to_achieve_deans_lister:.2f}"
+
+            if prelim_grade >= 75:
+                Element("passMessage").element.innerHTML = "Congratulations! You have passed the prelims."
+            else:
+                Element("passMessage").element.innerHTML = "You need to improve your score to pass."
+
+            result_element.style.display = "block"
+
+        except ValueError as e:
+            Element("errorMessage").element.innerHTML = f"Error: {e}"
+            result_element.style.display = "block"
+
+    # Attach the event listener to the calculate button using onclick
+    Element("calculateBtn").element.onclick = calculate_grade
+
+    # Modal close event listener using onclick
+    async def close_modal(event):
+        Element("resultModal").element.style.display = "none"
+
+    Element("closeModal").element.onclick = close_modal
+    Element("closeModalBtn").element.onclick = close_modal
+</py-script>
+
+</body>
+</html>
